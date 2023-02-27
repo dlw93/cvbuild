@@ -18,11 +18,11 @@ type BuildOptions struct {
 }
 
 func ImportMetaPlugin() api.Plugin {
-	quoteRE := func(q rune) string {
-		return fmt.Sprintf(`%c[^%c]+%c`, q, q, q)
+	jsStringLiteralRE := func(marks ...rune) string {
+		return strings.Join(Map(marks, func(q rune) string { return fmt.Sprintf(`%c[^%c]+%c`, q, q, q) }), "|")
 	}
-	literalRE := strings.Join(Map([]rune{'\'', '"', '`'}, quoteRE), "|")
-	importMetaRE := regexp.MustCompile(`(?m)\bnew\s+URL\s*\(\s*(` + literalRE + `)\s*,\s*import\.meta\.url\s*(?:,\s*)?\)`)
+	// "(?m)\\bnew\\s+URL\\s*\\(\\s*('[^']+'|\"[^\"]+\"|`[^`]+`)\\s*,\\s*import\\.meta\\.url\\s*(?:,\\s*)?\\)"
+	importMetaRE := regexp.MustCompile(`(?m)\bnew\s+URL\s*\(\s*(` + jsStringLiteralRE('\'', '"', '`') + `)\s*,\s*import\.meta\.url\s*(?:,\s*)?\)`)
 
 	return api.Plugin{
 		Name: "import-meta",

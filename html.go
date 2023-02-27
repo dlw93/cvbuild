@@ -14,7 +14,7 @@ type Document struct {
 	refs map[atom.Atom]string
 }
 
-type VisitorFunc func(string) (string, error)
+type DependencyHandler func(string) (string, error)
 
 func NewDocument(r io.Reader) (*Document, error) {
 	return newDocument(r, map[atom.Atom]string{
@@ -33,8 +33,8 @@ func (d *Document) NewDocumentWithOptions(r io.Reader, targets map[string]string
 	}
 }
 
-func (d *Document) Walk(v VisitorFunc) error {
-	return d.walk(d.root, v)
+func (d *Document) Walk(h DependencyHandler) error {
+	return d.walk(d.root, h)
 }
 
 func (d *Document) WriteTo(w io.Writer) error {
@@ -49,15 +49,15 @@ func newDocument(r io.Reader, refs map[atom.Atom]string) (*Document, error) {
 	return &Document{root, refs}, nil
 }
 
-func (d *Document) walk(node *html.Node, v VisitorFunc) error {
+func (d *Document) walk(node *html.Node, h DependencyHandler) error {
 	if node.Type == html.ElementNode {
 		if name, ok := d.refs[node.DataAtom]; ok {
 			for i, attr := range node.Attr {
 				if attr.Key == name {
-					if path, err := v(attr.Val); err != nil {
+					if path, err := h(attr.Val); err != nil {
 						return err
 					} else {
-						node.Attr[i] = html.Attribute{Key: name, Namespace: attr.Namespace, Val: path}
+						node.Attr[i].Val = path
 					}
 					break
 				}
@@ -66,7 +66,7 @@ func (d *Document) walk(node *html.Node, v VisitorFunc) error {
 	}
 
 	for c := node.FirstChild; c != nil; c = c.NextSibling {
-		if err := d.walk(c, v); err != nil {
+		if err := d.walk(c, h); err != nil {
 			return err
 		}
 	}

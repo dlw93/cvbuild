@@ -20,7 +20,7 @@ type messageError api.Message
 
 func ImportMetaUrlPlugin() api.Plugin {
 	jsStringLiteralRE := func(qmarks ...rune) string {
-		return strings.Join(Map(qmarks, func(q rune) string { return fmt.Sprintf(`%c%c%c`, q, q, q) }), "|")
+		return strings.Join(Map(qmarks, func(q rune) string { return fmt.Sprintf(`%c[^%c]*%c`, q, q, q) }), "|")
 	}
 	importMetaUrlRE := regexp.MustCompile(`(?m)\bnew\s+URL\s*\(\s*(` + jsStringLiteralRE('\'', '"', '`') + `)\s*,\s*import\.meta\.url\s*(?:,\s*)?\)`)
 	deps := func(text string) []string {
@@ -56,30 +56,29 @@ func AbsolutePathPlugin() api.Plugin {
 		Setup: func(build api.PluginBuild) {
 			root := filepath.Clean(build.InitialOptions.AbsWorkingDir)
 
-			build.OnResolve(api.OnResolveOptions{Filter: "^/"},
-				func(args api.OnResolveArgs) (api.OnResolveResult, error) {
-					rel, err := filepath.Rel(args.ResolveDir, filepath.Join(root, args.Path))
-					if err != nil {
-						err := fmt.Errorf("failed to resolve %s in %s: %w", args.Path, root, err)
-						return api.OnResolveResult{}, err
-					}
+			build.OnResolve(api.OnResolveOptions{Filter: "^/"}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+				rel, err := filepath.Rel(args.ResolveDir, filepath.Join(root, args.Path))
+				if err != nil {
+					err := fmt.Errorf("failed to resolve %s in %s: %w", args.Path, root, err)
+					return api.OnResolveResult{}, err
+				}
 
-					path := "./" + filepath.ToSlash(rel)
-					options := api.ResolveOptions{
-						ResolveDir: args.ResolveDir,
-						Kind:       args.Kind,
-						Importer:   args.Importer,
-						Namespace:  args.Namespace,
-					}
+				path := "./" + filepath.ToSlash(rel)
+				options := api.ResolveOptions{
+					ResolveDir: args.ResolveDir,
+					Kind:       args.Kind,
+					Importer:   args.Importer,
+					Namespace:  args.Namespace,
+				}
 
-					result := build.Resolve(path, options)
-					errs := errors.Join(Map(result.Errors, newMessageError)...)
+				result := build.Resolve(path, options)
+				errs := errors.Join(Map(result.Errors, newMessageError)...)
 
-					return api.OnResolveResult{
-						Path:      result.Path,
-						Namespace: args.Namespace,
-					}, errs
-				})
+				return api.OnResolveResult{
+					Path:      result.Path,
+					Namespace: args.Namespace,
+				}, errs
+			})
 		},
 	}
 }
@@ -105,18 +104,9 @@ func Build(input string, options BuildOptions) ([]string, error) {
 			ImportMetaUrlPlugin(),
 		},
 	}
-
-	ctx, err := api.Context(opts)
-	if err != nil {
-		return nil, errors.Join(Map(err.Errors, newMessageError)...)
-	}
-	defer ctx.Dispose()
-
-	result := ctx.Rebuild()
-
+	result := api.Build(opts)
 	errs := errors.Join(Map(result.Errors, newMessageError)...)
 	outfiles := Map(result.OutputFiles, func(f api.OutputFile) string { return f.Path })
-
 	return outfiles, errs
 }
 

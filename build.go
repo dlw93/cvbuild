@@ -12,102 +12,122 @@ import (
 )
 
 type BuildOptions struct {
-	InputFile           string
 	OutputDirectory     string
 	ProjectRootAbsolute string
 }
 
-func ImportMetaPlugin() api.Plugin {
-	jsStringLiteralRE := func(marks ...rune) string {
-		return strings.Join(Map(marks, func(q rune) string { return fmt.Sprintf(`%c[^%c]+%c`, q, q, q) }), "|")
+type messageError api.Message
+
+func ImportMetaUrlPlugin() api.Plugin {
+	jsStringLiteralRE := func(qmarks ...rune) string {
+		return strings.Join(Map(qmarks, func(q rune) string { return fmt.Sprintf(`%c%c%c`, q, q, q) }), "|")
 	}
-	// "(?m)\\bnew\\s+URL\\s*\\(\\s*('[^']+'|\"[^\"]+\"|`[^`]+`)\\s*,\\s*import\\.meta\\.url\\s*(?:,\\s*)?\\)"
-	importMetaRE := regexp.MustCompile(`(?m)\bnew\s+URL\s*\(\s*(` + jsStringLiteralRE('\'', '"', '`') + `)\s*,\s*import\.meta\.url\s*(?:,\s*)?\)`)
+	importMetaUrlRE := regexp.MustCompile(`(?m)\bnew\s+URL\s*\(\s*(` + jsStringLiteralRE('\'', '"', '`') + `)\s*,\s*import\.meta\.url\s*(?:,\s*)?\)`)
+	deps := func(text string) []string {
+		matches := importMetaUrlRE.FindAllStringSubmatchIndex(text, -1)
+		return Map(matches, func(match []int) string {
+			return text[match[2]+1 : match[3]-1] // +1/-1 to remove quotes
+		})
+	}
 
 	return api.Plugin{
-		Name: "import-meta",
+		Name: "import-meta-url",
 		Setup: func(build api.PluginBuild) {
 			build.OnLoad(api.OnLoadOptions{Filter: ".js$"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
 				b, err := os.ReadFile(args.Path)
 				if err != nil {
 					return api.OnLoadResult{}, err
 				}
-
 				s := string(b)
-
-				for _, match := range importMetaRE.FindAllStringSubmatch(s, -1) {
-					str := match[1]
-					path := str[1 : len(str)-1]
-					fmt.Println("import-meta", path)
-				}
-
 				return api.OnLoadResult{
 					Contents:   &s,
 					ResolveDir: filepath.Dir(args.Path),
 					Loader:     api.LoaderJS,
+					WatchFiles: deps(s),
 				}, nil
 			})
 		},
 	}
 }
 
-func AbsolutePathPlugin(root string) api.Plugin {
+func AbsolutePathPlugin() api.Plugin {
 	return api.Plugin{
 		Name: "absolute-path",
 		Setup: func(build api.PluginBuild) {
+			root := filepath.Clean(build.InitialOptions.AbsWorkingDir)
+
 			build.OnResolve(api.OnResolveOptions{Filter: "^/"},
 				func(args api.OnResolveArgs) (api.OnResolveResult, error) {
-					// TODO filepath.Rel()
-					rel := fmt.Sprintf(".%s", args.Path)
+					rel, err := filepath.Rel(args.ResolveDir, filepath.Join(root, args.Path))
+					if err != nil {
+						err := fmt.Errorf("failed to resolve %s in %s: %w", args.Path, root, err)
+						return api.OnResolveResult{}, err
+					}
+
+					path := "./" + filepath.ToSlash(rel)
 					options := api.ResolveOptions{
-						ResolveDir: root,
+						ResolveDir: args.ResolveDir,
 						Kind:       args.Kind,
 						Importer:   args.Importer,
 						Namespace:  args.Namespace,
 					}
-					result := build.Resolve(rel, options)
-					if len(result.Errors) > 0 {
-						err := fmt.Errorf("failed to resolve %s in %s: %s", args.Path, root, result.Errors[0].Text)
-						return api.OnResolveResult{}, err
-					}
+
+					result := build.Resolve(path, options)
+					errs := errors.Join(Map(result.Errors, newMessageError)...)
+
 					return api.OnResolveResult{
 						Path:      result.Path,
 						Namespace: args.Namespace,
-					}, nil
+					}, errs
 				})
 		},
 	}
 }
 
-func Build(entryFile string, outputDir string) ([]string, error) {
-	result := api.Build(api.BuildOptions{
-		EntryPoints: []string{entryFile},
+func Build(input string, options BuildOptions) ([]string, error) {
+	opts := api.BuildOptions{
+		EntryPoints:   []string{input},
+		AbsWorkingDir: options.ProjectRootAbsolute,
 
 		Bundle:            true,
 		MinifyWhitespace:  true,
 		MinifyIdentifiers: true,
 		MinifySyntax:      true,
 
-		Outdir:     outputDir,
+		Outdir:     options.OutputDirectory,
 		Write:      true,
 		Format:     api.FormatESModule,
 		EntryNames: "[name]",
 		AssetNames: "[name]",
 
 		Plugins: []api.Plugin{
-			AbsolutePathPlugin("./"),
-			ImportMetaPlugin(),
+			AbsolutePathPlugin(),
+			ImportMetaUrlPlugin(),
 		},
-	})
-
-	if len(result.Errors) > 0 {
-		errs := Map(result.Errors, func(err api.Message) error {
-			return fmt.Errorf("%s:%d: %s", err.Location.File, err.Location.Line, err.Text)
-		})
-		return nil, errors.Join(errs...)
 	}
 
+	ctx, err := api.Context(opts)
+	if err != nil {
+		return nil, errors.Join(Map(err.Errors, newMessageError)...)
+	}
+	defer ctx.Dispose()
+
+	result := ctx.Rebuild()
+
+	errs := errors.Join(Map(result.Errors, newMessageError)...)
 	outfiles := Map(result.OutputFiles, func(f api.OutputFile) string { return f.Path })
 
-	return outfiles, nil
+	return outfiles, errs
+}
+
+func newMessageError(msg api.Message) error {
+	return messageError(msg)
+}
+
+func (msg messageError) Error() string {
+	if msg.Location != nil {
+		return fmt.Sprintf("%s [Ln %d, Col %d]: %s", msg.Location.File, msg.Location.Line, msg.Location.Column, msg.Text)
+	} else {
+		return msg.Text
+	}
 }

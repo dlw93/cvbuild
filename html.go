@@ -3,15 +3,14 @@ package main
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
 
 type Document struct {
-	root *html.Node
-	refs map[atom.Atom]string
+	root    *html.Node
+	targets map[atom.Atom]string
 }
 
 type DependencyHandler func(string) (string, error)
@@ -21,7 +20,6 @@ func NewDocument(r io.Reader) (*Document, error) {
 		atom.Script: "src",
 		atom.Link:   "href",
 		atom.Img:    "src",
-		atom.A:      "href",
 	})
 }
 
@@ -41,17 +39,17 @@ func (d *Document) WriteTo(w io.Writer) error {
 	return html.Render(w, d.root)
 }
 
-func newDocument(r io.Reader, refs map[atom.Atom]string) (*Document, error) {
+func newDocument(r io.Reader, targets map[atom.Atom]string) (*Document, error) {
 	root, err := html.Parse(r)
 	if err != nil {
 		return nil, err
 	}
-	return &Document{root, refs}, nil
+	return &Document{root, targets}, nil
 }
 
 func (d *Document) walk(node *html.Node, h DependencyHandler) error {
 	if node.Type == html.ElementNode {
-		if name, ok := d.refs[node.DataAtom]; ok {
+		if name, ok := d.targets[node.DataAtom]; ok {
 			for i, attr := range node.Attr {
 				if attr.Key == name {
 					if path, err := h(attr.Val); err != nil {
@@ -75,11 +73,10 @@ func (d *Document) walk(node *html.Node, h DependencyHandler) error {
 }
 
 func lookup(m map[string]string) (map[atom.Atom]string, error) {
-	lcb := func(s string) []byte { return []byte(strings.ToLower(s)) }
 	r := make(map[atom.Atom]string, len(m))
 	for tag, attr := range m {
-		if t := atom.Lookup(lcb(tag)); t == 0 {
-			return nil, fmt.Errorf("invalid tag %q", tag)
+		if t := atom.Lookup([]byte(tag)); t == 0 {
+			return nil, fmt.Errorf("unknown tag %q", tag)
 		} else {
 			r[t] = attr
 		}

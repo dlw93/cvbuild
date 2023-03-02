@@ -27,6 +27,7 @@ func (p *Pair[T, U]) String() string {
 	return fmt.Sprintf("(%v, %v)", p.First, p.Second)
 }
 
+// Unwrap returns the elements of the pair.
 func (p *Pair[T, U]) Unwrap() (T, U) {
 	return p.First, p.Second
 }
@@ -49,7 +50,7 @@ func Find[E any](s []E, f Predicate[E]) *E {
 	return nil
 }
 
-// Map applies `f` to each element of `s` and returns a new slice containing the results.
+// Map applies `f` to each element of slice `s` and returns a new slice containing the results.
 func Map[A, B any](s []A, f func(A) B) []B {
 	t := make([]B, len(s))
 	for i := range s {

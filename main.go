@@ -18,13 +18,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	strvar := func(p *string, name string, short rune, value string, usage string) {
-		flag.StringVar(p, name, value, usage)
-		flag.StringVar(p, string(short), value, usage+" (shorthand)")
-	}
-	strvar(&args.InputFile, "input-file", 'i', "./index.html", "input file")
-	strvar(&args.OutputDirectory, "output-directory", 'o', "./dist", "output directory")
-	strvar(&args.ProjectRootAbsolute, "project-root", 'p', cwd, "absolute path to the project root directory")
+	flag.StringVar(&args.InputFile, "input-file", "./index.html", "input file")
+	flag.StringVar(&args.OutputDirectory, "output-directory", "./dist", "output directory")
+	flag.StringVar(&args.ProjectRootAbsolute, "project-root", cwd, "absolute path to the project root directory")
 }
 
 func main() {
@@ -54,11 +50,12 @@ func main() {
 	}
 
 	err = doc.Walk(func(path string) (string, error) {
-		result, err := Build(path, args.OutputDirectory)
-		if err != nil {
+		options := BuildOptions{args.OutputDirectory, args.ProjectRootAbsolute}
+		if result, err := Build(path, options); err != nil {
 			return "", err
+		} else {
+			return result[0], nil
 		}
-		return result[0], nil
 	})
 	if err != nil {
 		log.Fatalf("failed to process dependency in %s: %s", args.InputFile, err)

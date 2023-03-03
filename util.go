@@ -12,13 +12,13 @@ type Number interface {
 	constraints.Integer | constraints.Float
 }
 
-type Pair[T, U comparable] struct {
+type Pair[T, U any] struct {
 	First  T
 	Second U
 }
 
 // NewPair returns a pointer to a new pair.
-func NewPair[T, U comparable](first T, second U) *Pair[T, U] {
+func NewPair[T, U any](first T, second U) *Pair[T, U] {
 	return &Pair[T, U]{first, second}
 }
 
@@ -62,30 +62,21 @@ func Map[A, B any](s []A, f func(A) B) []B {
 	return t
 }
 
-// Reduce applies `f` to each element of slice `s` and the current value of `a` and returns the final value of `a`.
-//
-// If `a` is not provided and types `A` and `B` are equal, the first element of `s` is used as the initial accumulator value.
-// In this case, if `s` is empty, Reduce panics.
-func Reduce[A, B any](s []A, f Reducer[A, B], a ...B) B {
-	var r B
-	if len(a) > 0 {
-		r = a[0]
-	} else if len(s) > 0 {
-		if p, ok := any(&s[0]).(*B); ok {
-			r = *p
-			s = s[1:]
-		} else {
-			err := fmt.Errorf("Reduce: initial value for accumulator `a` unspecified, but type parameters `A` and `B` have different types %T and %T", s[0], r)
-			panic(err)
-		}
-	} else {
-		err := fmt.Errorf("Reduce: initial value for accumulator `a` unspecified, but slice `s` is empty")
+// Fold applies `f` to each element of slice `s` and the current value of `a` and returns the final value of `a`.
+func Fold[A, B any](s []A, a B, f Reducer[A, B]) B {
+	for i := range s {
+		a = f(a, s[i])
+	}
+	return a
+}
+
+// Reduce operates like Fold, but uses `s[0]` as the initial accumulator value and then folds `s[1:]`.
+func Reduce[E any](s []E, f func(E, E) E) E {
+	if len(s) == 0 {
+		err := fmt.Errorf("Reduce: slice `s` is empty")
 		panic(err)
 	}
-	for i := range s {
-		r = f(r, s[i])
-	}
-	return r
+	return Fold(s[1:], s[0], f)
 }
 
 // Pow computes `a` to the power of `b` in O(log2 b) time.

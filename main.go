@@ -26,7 +26,7 @@ func init() {
 func main() {
 	flag.Parse()
 
-	if info, err := os.Stat(args.InputFile); err != nil {
+	if info, err := os.Stat(args.InputFile); err != nil || info.Mode().IsDir() {
 		log.Fatalf("entry point %s does not exist", args.InputFile)
 	} else if info.IsDir() {
 		log.Fatalf("entry point %s is a directory", args.InputFile)
@@ -54,7 +54,7 @@ func main() {
 		if result, err := Build(path, options); err != nil {
 			return "", err
 		} else {
-			return result[0], nil
+			return result, nil
 		}
 	})
 	if err != nil {

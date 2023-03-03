@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
 )
@@ -16,20 +14,9 @@ type BuildOptions struct {
 	ProjectRootAbsolute string
 }
 
-type messageError api.Message
+type BuildError api.Message
 
 func ImportMetaUrlPlugin() api.Plugin {
-	jsStringLiteralRE := func(qmarks ...rune) string {
-		return strings.Join(Map(qmarks, func(q rune) string { return fmt.Sprintf(`%c[^%c]*%c`, q, q, q) }), "|")
-	}
-	importMetaUrlRE := regexp.MustCompile(`(?m)\bnew\s+URL\s*\(\s*(` + jsStringLiteralRE('\'', '"', '`') + `)\s*,\s*import\.meta\.url\s*(?:,\s*)?\)`)
-	deps := func(text string) []string {
-		matches := importMetaUrlRE.FindAllStringSubmatchIndex(text, -1)
-		return Map(matches, func(match []int) string {
-			return text[match[2]+1 : match[3]-1] // +1/-1 to remove quotes
-		})
-	}
-
 	return api.Plugin{
 		Name: "import-meta-url",
 		Setup: func(build api.PluginBuild) {
@@ -38,12 +25,14 @@ func ImportMetaUrlPlugin() api.Plugin {
 				if err != nil {
 					return api.OnLoadResult{}, err
 				}
-				s := string(b)
+				s := NewDependencyScanner(b)
+				contents := s.String()
+				deps := s.Scan()
 				return api.OnLoadResult{
-					Contents:   &s,
+					Contents:   &contents,
 					ResolveDir: filepath.Dir(args.Path),
 					Loader:     api.LoaderJS,
-					WatchFiles: deps(s),
+					WatchFiles: deps,
 				}, nil
 			})
 		},
@@ -72,7 +61,7 @@ func AbsolutePathPlugin() api.Plugin {
 				}
 
 				result := build.Resolve(path, options)
-				errs := errors.Join(Map(result.Errors, newMessageError)...)
+				errs := newBuildError(result.Errors)
 
 				return api.OnResolveResult{
 					Path:      result.Path,
@@ -83,7 +72,7 @@ func AbsolutePathPlugin() api.Plugin {
 	}
 }
 
-func Build(input string, options BuildOptions) ([]string, error) {
+func Build(input string, options BuildOptions) (string, error) {
 	opts := api.BuildOptions{
 		EntryPoints:   []string{input},
 		AbsWorkingDir: options.ProjectRootAbsolute,
@@ -105,16 +94,28 @@ func Build(input string, options BuildOptions) ([]string, error) {
 		},
 	}
 	result := api.Build(opts)
-	errs := errors.Join(Map(result.Errors, newMessageError)...)
-	outfiles := Map(result.OutputFiles, func(f api.OutputFile) string { return f.Path })
-	return outfiles, errs
+
+	if len(result.Errors) > 0 {
+		return "", newBuildError(result.Errors)
+	} else if len(result.OutputFiles) == 0 {
+		return "", fmt.Errorf("no output generated for %s", input)
+	}
+
+	return result.OutputFiles[0].Path, nil
 }
 
-func newMessageError(msg api.Message) error {
-	return messageError(msg)
+func newBuildError[T api.Message | []api.Message](msg T) error {
+	switch msg := any(msg).(type) {
+	case api.Message:
+		return BuildError(msg)
+	case []api.Message:
+		return errors.Join(Map(msg, newBuildError[api.Message])...)
+	default:
+		panic("unreachable")
+	}
 }
 
-func (msg messageError) Error() string {
+func (msg BuildError) Error() string {
 	if msg.Location != nil {
 		return fmt.Sprintf("%s [Ln %d, Col %d]: %s", msg.Location.File, msg.Location.Line, msg.Location.Column, msg.Text)
 	} else {

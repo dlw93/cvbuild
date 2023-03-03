@@ -75,7 +75,7 @@ func Reduce[A, B any](s []A, f Reducer[A, B], a ...B) B {
 			r = *p
 			s = s[1:]
 		} else {
-			err := fmt.Errorf("Reduce: initial value for accumulator `a` unspecified, but types %T and %T are not equal", s[0], r)
+			err := fmt.Errorf("Reduce: initial value for accumulator `a` unspecified, but type parameters `A` and `B` have different types %T and %T", s[0], r)
 			panic(err)
 		}
 	} else {

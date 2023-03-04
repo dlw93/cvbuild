@@ -31,31 +31,44 @@ func TestMap(t *testing.T) {
 }
 
 func TestFold(t *testing.T) {
-	var want any
-
 	asc := []int{1, 2, 3, 4, 5, 6, 7, 8, 9}
 	empty := []int{}
 
 	sum := func(a, b int) int { return a + b }
 	cat := func(a string, b int) string { return a + strconv.Itoa(b) }
 
-	// TODO make more generic
+	type input[T, U any] struct {
+		s []T
+		a U
+		f Reducer[T, U]
+	}
 
-	want = 45
-	if got := Fold(asc, 0, sum); got != want {
-		t.Errorf("got %v, want %v", got, want)
+	tcintint := []Pair[input[int, int], int]{
+		{input[int, int]{asc, 0, sum}, 45},
+		{input[int, int]{asc, 5, sum}, 50},
+		{input[int, int]{empty, 58, sum}, 58},
 	}
-	want = 50
-	if got := Fold(asc, 5, sum); got != want {
-		t.Errorf("got %v, want %v", got, want)
+
+	tcintstr := []Pair[input[int, string], string]{
+		{input[int, string]{asc, "0", cat}, "0123456789"},
 	}
-	want = 58
-	if got := Fold(empty, 58, sum); got != want {
-		t.Errorf("got %v, want %v", got, want)
+
+	for _, tc := range tcintint {
+		input, want := tc.Unwrap()
+		t.Run(fmt.Sprintf("Fold(%v, %v, %v)", input.s, input.a, input.f), func(t *testing.T) {
+			if got := Fold(input.s, input.a, input.f); got != want {
+				t.Errorf("got %v, want %v", got, want)
+			}
+		})
 	}
-	want = "0123456789"
-	if got := Fold(asc, "0", cat); got != want {
-		t.Errorf("got %v, want %v", got, want)
+
+	for _, tc := range tcintstr {
+		input, want := tc.Unwrap()
+		t.Run(fmt.Sprintf("Fold(%v, %v, %v)", input.s, input.a, input.f), func(t *testing.T) {
+			if got := Fold(input.s, input.a, input.f); got != want {
+				t.Errorf("got %v, want %v", got, want)
+			}
+		})
 	}
 }
 

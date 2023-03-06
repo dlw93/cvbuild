@@ -2,10 +2,10 @@ module github.com/dlw93/cvbuild
 
 go 1.20
 
-require github.com/evanw/esbuild v0.17.10
+require github.com/evanw/esbuild v0.17.11
 
 require (
-	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
-	golang.org/x/net v0.7.0
-	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/exp v0.0.0-20230304125523-9ff063c70017
+	golang.org/x/net v0.8.0
+	golang.org/x/sys v0.6.0 // indirect
 )

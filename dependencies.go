@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"unsafe"
+
+	"github.com/dlw93/cvbuild/util"
 )
 
 type DependencyScanner struct {
@@ -14,7 +16,7 @@ type DependencyScanner struct {
 var re *regexp.Regexp
 
 func init() {
-	res := Map([]rune{'\'', '"', '`'}, func(q rune) string {
+	res := util.Map([]rune{'\'', '"', '`'}, func(q rune) string {
 		s := string(q)
 		return s + "[^" + s + "]*" + s
 	})
@@ -34,7 +36,7 @@ func (s *DependencyScanner) Scan() []string {
 		return nil
 	}
 	matches := re.FindAllSubmatchIndex(s.text, -1)
-	return Map(matches, func(match []int) string {
+	return util.Map(matches, func(match []int) string {
 		beg, end := match[2]+1, match[3]-1 // +1/-1 to remove quotes
 		return unsafe.String(&s.text[beg], end-beg)
 	})

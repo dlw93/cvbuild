@@ -1,4 +1,4 @@
-package main
+package util
 
 import (
 	"fmt"
@@ -8,13 +8,17 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+func newEqualityPredicate[T comparable](c T) Predicate[T] {
+	return func(v T) bool { return c == v }
+}
+
 func TestFind(t *testing.T) {
 	s := []int{1, 2, 3, 4, 5, 6, 7, 8, 9}
 	v := []int{0, 1, 5, 9, 10}
 	want := []*int{nil, &s[0], &s[4], &s[8], nil}
 	for i, e := range v {
 		t.Run(fmt.Sprintf("Find %d", e), func(t *testing.T) {
-			if got := Find(s, NewEqualityPredicate(e)); got != want[i] {
+			if got := Find(s, newEqualityPredicate(e)); got != want[i] {
 				t.Errorf("got %v, want %v", got, want[i])
 			}
 		})
@@ -54,7 +58,7 @@ func TestFold(t *testing.T) {
 	}
 
 	for _, tc := range tcintint {
-		input, want := tc.Unwrap()
+		input, want := tc.Unpack()
 		t.Run(fmt.Sprintf("Fold(%v, %v, %v)", input.s, input.a, input.f), func(t *testing.T) {
 			if got := Fold(input.s, input.a, input.f); got != want {
 				t.Errorf("got %v, want %v", got, want)
@@ -63,7 +67,7 @@ func TestFold(t *testing.T) {
 	}
 
 	for _, tc := range tcintstr {
-		input, want := tc.Unwrap()
+		input, want := tc.Unpack()
 		t.Run(fmt.Sprintf("Fold(%v, %v, %v)", input.s, input.a, input.f), func(t *testing.T) {
 			if got := Fold(input.s, input.a, input.f); got != want {
 				t.Errorf("got %v, want %v", got, want)
@@ -89,7 +93,7 @@ func TestReduce(t *testing.T) {
 	want := []int{45, 362880, 58, 58}
 
 	for i, input := range input {
-		s, f := input.Unwrap()
+		s, f := input.Unpack()
 		t.Run(fmt.Sprintf("Reduce(%v, %v)", s, f), func(t *testing.T) {
 			if got := Reduce(s, f); got != want[i] {
 				t.Errorf("got %v, want %v", got, want[i])
@@ -107,15 +111,51 @@ func TestReduce(t *testing.T) {
 	})
 }
 
-func TestPow(t *testing.T) {
-	s := []Pair[int, uint]{{3, 0}, {3, 1}, {3, 2}, {3, 3}, {3, 4}}
-	want := []int{1, 3, 9, 27, 81}
-	for i, input := range s {
-		s, f := input.Unwrap()
-		t.Run(fmt.Sprintf("Pow(%d, %d) == %d", s, f, want[i]), func(t *testing.T) {
-			if got := Pow(s, f); got != want[i] {
-				t.Errorf("got %v, want %v", got, want[i])
-			}
-		})
+func TestCartesianProduct(t *testing.T) {
+	a := []int{1, 2, 3}
+	b := []string{"a", "b", "c"}
+	want := []Pair[int, string]{
+		{1, "a"}, {1, "b"}, {1, "c"},
+		{2, "a"}, {2, "b"}, {2, "c"},
+		{3, "a"}, {3, "b"}, {3, "c"},
+	}
+
+	i := 0
+	for it, pair := CartesianProduct(a, b).Iterator(); it.Next(); {
+		gotA, gotB := pair.Unpack()
+		wantA, wantB := want[i].Unpack()
+		if *gotA != wantA || *gotB != wantB {
+			t.Errorf("got %v, want %v", pair, want[i])
+		}
+		i++
+	}
+}
+
+func TestJoin(t *testing.T) {
+	r := []string{"a", "b", "c"}
+	s := []int{1, 2, 3}
+	condition := func(a *string, b *int) bool { return *a == string(rune(*b-1+'a')) }
+	want := []Pair[string, int]{{"a", 1}, {"b", 2}, {"c", 3}}
+
+	it, _ := withDefaultCollector(Join(r, s, condition)).Iterator()
+	got := Map(it.Collect(), func(p Pair[*string, *int]) Pair[string, int] { return Pair[string, int]{*p.First, *p.Second} })
+
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestCollection(t *testing.T) {
+	c := Collection[int]{1, 2, 3, 4, 5, 6, 7, 8, 9}
+
+	even := func(i int) bool { return i%2 == 0 }
+	square := func(i int) int { return i * i }
+	sum := func(a, b int) int { return a + b }
+
+	got := c.Filter(even).Map(square).Reduce(sum)
+	want := 120
+
+	if got != want {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }

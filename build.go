@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/evanw/esbuild/pkg/api"
+
+	"github.com/dlw93/cvbuild/util"
 )
 
 type BuildOptions struct {
@@ -109,7 +111,7 @@ func newBuildError[T api.Message | []api.Message](msg T) error {
 	case api.Message:
 		return BuildError(msg)
 	case []api.Message:
-		return errors.Join(Map(msg, newBuildError[api.Message])...)
+		return errors.Join(util.Map(msg, newBuildError[api.Message])...)
 	default:
 		panic("unreachable")
 	}

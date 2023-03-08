@@ -114,20 +114,15 @@ func TestReduce(t *testing.T) {
 func TestCartesianProduct(t *testing.T) {
 	a := []int{1, 2, 3}
 	b := []string{"a", "b", "c"}
+	
 	want := []Pair[int, string]{
 		{1, "a"}, {1, "b"}, {1, "c"},
 		{2, "a"}, {2, "b"}, {2, "c"},
 		{3, "a"}, {3, "b"}, {3, "c"},
 	}
-
-	i := 0
-	for it, pair := CartesianProduct(a, b).Iterator(); it.Next(); {
-		gotA, gotB := pair.Unpack()
-		wantA, wantB := want[i].Unpack()
-		if *gotA != wantA || *gotB != wantB {
-			t.Errorf("got %v, want %v", pair, want[i])
-		}
-		i++
+	got := CartesianProduct(a, b)
+	if !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
@@ -135,11 +130,9 @@ func TestJoin(t *testing.T) {
 	r := []string{"a", "b", "c"}
 	s := []int{1, 2, 3}
 	condition := func(a *string, b *int) bool { return *a == string(rune(*b-1+'a')) }
+
 	want := []Pair[string, int]{{"a", 1}, {"b", 2}, {"c", 3}}
-
-	it, _ := withDefaultCollector(Join(r, s, condition)).Iterator()
-	got := Map(it.Collect(), func(p Pair[*string, *int]) Pair[string, int] { return Pair[string, int]{*p.First, *p.Second} })
-
+	got := Join(r, s, condition)
 	if !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}

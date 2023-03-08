@@ -17,7 +17,7 @@ func (it *collectionIterator[T]) Next() bool {
 	return true
 }
 
-func (c Collection[T]) Iterate() (Iterator[T], *T) {
+func (c Collection[T]) Iterator() (Iterator[T], *T) {
 	it := &collectionIterator[T]{Collection: &c}
 	return it, &it.v
 }
@@ -42,12 +42,10 @@ func (c Collection[T]) Reduce(f Reducer[T, T]) T {
 	return Reduce(c, f)
 }
 
-func (c Collection[T]) CartesianProduct(t Collection[T]) []Pair[*T, *T] {
-	it, _ := withDefaultCollector(CartesianProduct(c, t)).Iterator()
-	return it.Collect()
+func (c Collection[T]) CartesianProduct(t Collection[T]) []Pair[T, T] {
+	return CartesianProduct(c, t)
 }
 
-func (c Collection[T]) Join(t Collection[T], condition JoinPredicate[*T, *T]) []Pair[*T, *T] {
-	it, _ := withDefaultCollector(Join(c, t, condition)).Iterator()
-	return it.Collect()
+func (c Collection[T]) Join(t Collection[T], condition JoinPredicate[T, T]) []Pair[T, T] {
+	return Join(c, t, condition)
 }

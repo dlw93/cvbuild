@@ -114,7 +114,7 @@ func TestReduce(t *testing.T) {
 func TestCartesianProduct(t *testing.T) {
 	a := []int{1, 2, 3}
 	b := []string{"a", "b", "c"}
-	
+
 	want := []Pair[int, string]{
 		{1, "a"}, {1, "b"}, {1, "c"},
 		{2, "a"}, {2, "b"}, {2, "c"},
@@ -150,5 +150,29 @@ func TestCollection(t *testing.T) {
 
 	if got != want {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestTuple(t *testing.T) {
+	type tuple struct {
+		id   [2]uint
+		name string
+		s    []int
+	}
+
+	v := tuple{
+		id:   [2]uint{1, 2},
+		name: "foo",
+		s:    []int{1, 2, 3},
+	}
+
+	got := newOffset(func(v *tuple) *string { return &v.name })
+	want := Offset[tuple, string](16)
+	if got != want {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	if got.Get(&v) != want.Get(&v) {
+		t.Errorf("got %v, want %v", got.Get(&v), want.Get(&v))
 	}
 }

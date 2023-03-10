@@ -41,11 +41,3 @@ func (c Collection[T]) Fold(a T, f Reducer[T, T]) T {
 func (c Collection[T]) Reduce(f Reducer[T, T]) T {
 	return Reduce(c, f)
 }
-
-func (c Collection[T]) CartesianProduct(t Collection[T]) []Pair[T, T] {
-	return CartesianProduct(c, t)
-}
-
-func (c Collection[T]) Join(t Collection[T], condition JoinPredicate[T, T]) []Pair[T, T] {
-	return Join(c, t, condition)
-}
